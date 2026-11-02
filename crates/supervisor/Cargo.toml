@@ -5,9 +5,15 @@ edition = "2021"
 
 [dependencies]
 universalrun-common = { path = "../common" }
+universalrun-profile-manager = { path = "../profile-manager" }
+universalrun-sandbox = { path = "../sandbox" }
+universalrun-diagnostics = { path = "../diagnostics" }
 tokio = { version = "1.38", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 
+[dev-dependencies]
+tempfile = "3"
+rand = "0.8"

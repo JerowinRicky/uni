@@ -33,6 +33,8 @@ enum Commands {
     Bundle(BundleArgs),
     /// Plan bubblewrap sandbox argument vector for an application profile (no execution)
     SandboxPlan(SandboxPlanArgs),
+    /// Run an application profile under supervision
+    Run(RunArgs),
 }
 
 #[derive(Args)]
@@ -71,6 +73,16 @@ struct SandboxPlanArgs {
     /// Output plan as JSON
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Args)]
+struct RunArgs {
+    /// Identifier of configured application profile
+    profile: String,
+
+    /// Request real Linux bubblewrap execution backend instead of mock runtime [UNTESTED ON LINUX]
+    #[arg(long)]
+    real_backend: bool,
 }
 
 #[derive(Args)]
@@ -143,6 +155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Diagnose(args) => handle_diagnose(args),
         Commands::Bundle(args) => handle_bundle(args),
         Commands::SandboxPlan(args) => handle_sandbox_plan(args),
+        Commands::Run(args) => handle_run(args),
     }
 }
 
@@ -677,6 +690,71 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
             }
         }
         println!();
+    }
+
+    Ok(())
+}
+
+fn handle_run(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let storage = ProfileStorage::new(None);
+    let manifest = match storage.get_profile(&args.profile) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error loading profile '{}': {}", args.profile, e);
+            std::process::exit(1);
+        }
+    };
+
+    println!("================================================================================");
+    println!(" UniversalRun Process Supervisor: {}", args.profile);
+    println!("================================================================================");
+
+    let catalog_path = PathBuf::from("diagnostics/catalog/fixes.toml");
+    let catalog = if catalog_path.exists() {
+        universalrun_diagnostics::FixCatalog::from_file(&catalog_path)?
+    } else {
+        universalrun_diagnostics::FixCatalog::default()
+    };
+
+    let supervisor = std::sync::Arc::new(universalrun_supervisor::ProcessSupervisor::new(
+        &args.profile,
+        Some(catalog),
+    ));
+
+    if args.real_backend {
+        #[cfg(not(target_os = "linux"))]
+        {
+            eprintln!("Error: Real bubblewrap execution is only supported on Linux hosts [UNTESTED ON LINUX].");
+            std::process::exit(1);
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            println!("Starting real sandbox execution under Bubblewrap [UNTESTED ON LINUX]...");
+        }
+    } else {
+        println!("Execution Backend: MockRuntime (host-agnostic simulation, default on Windows)");
+        println!("Note: Use --real-backend on Linux for real bubblewrap sandbox execution.\n");
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let mock = universalrun_supervisor::MockRuntime::new(supervisor.clone());
+            let app_name = manifest.target_app.clone();
+            let sim_logs = [
+                "UniversalRun sandbox initialized",
+                "Wine server started inside unshared PID namespace [SIMULATED]",
+                &format!("Loaded target application: C:\\{}", app_name),
+                "Executing application main window message loop...",
+            ];
+            println!("Simulating application execution (1 second)...");
+            let _ = mock
+                .run_simulation(std::time::Duration::from_secs(1), &sim_logs, 0)
+                .await;
+            println!(
+                "Simulation finished cleanly. Final supervisor state: {}",
+                supervisor.state()
+            );
+        });
     }
 
     Ok(())

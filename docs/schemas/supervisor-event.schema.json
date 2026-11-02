@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://universalrun.org/schemas/supervisor-event.v1.json",
+  "title": "UniversalRun Supervisor IPC Event",
+  "description": "Schema for real-time events streamed from the UniversalRun supervisor to connected UI clients.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "sequence",
+    "timestamp",
+    "profile_id",
+    "event"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonically increasing sequence number for gap and drop detection."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "event": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "lifecycle_state_changed",
+            "log_line",
+            "installer_progress",
+            "events_dropped",
+            "diagnostics_ready"
+          ]
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}
