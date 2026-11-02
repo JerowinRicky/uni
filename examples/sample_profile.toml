@@ -1,0 +1,27 @@
+schema_version = "1.0.0"
+profile_id = "notepad_plus_plus"
+display_name = "Notepad++ (64-bit)"
+target_app = "notepad++.exe"
+rebuild_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+filesystem_mappings = []
+
+[runtime]
+name = "wine"
+version = "9.0"
+architecture = "win64"
+windows_version = "win10"
+
+[[dependencies]]
+id = "wine-mono"
+version = "9.0.0"
+sha256 = "TODO"
+
+[env_vars]
+
+[dll_overrides]
+
+[permissions]
+network = true
+audio = false
+display = true
+dri = false

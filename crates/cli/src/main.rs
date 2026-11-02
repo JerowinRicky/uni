@@ -31,6 +31,8 @@ enum Commands {
     Diagnose(DiagnoseArgs),
     /// Build a privacy-scrubbed diagnostic bug reporting bundle
     Bundle(BundleArgs),
+    /// Plan bubblewrap sandbox argument vector for an application profile (no execution)
+    SandboxPlan(SandboxPlanArgs),
 }
 
 #[derive(Args)]
@@ -59,6 +61,16 @@ struct BundleArgs {
     /// Destination directory for diagnostic bundle
     #[arg(long)]
     out: PathBuf,
+}
+
+#[derive(Args)]
+struct SandboxPlanArgs {
+    /// Identifier of configured application profile
+    profile: String,
+
+    /// Output plan as JSON
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Args)]
@@ -130,6 +142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Profile(args) => handle_profile(args),
         Commands::Diagnose(args) => handle_diagnose(args),
         Commands::Bundle(args) => handle_bundle(args),
+        Commands::SandboxPlan(args) => handle_sandbox_plan(args),
     }
 }
 
@@ -471,6 +484,130 @@ fn handle_bundle(args: BundleArgs) -> Result<(), Box<dyn std::error::Error>> {
     let out = builder.build_bundle(&args.logfile, &manifest, &report, &args.out)?;
 
     println!("Diagnostic bundle created at: {}", out.display());
+    Ok(())
+}
+
+fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let storage = ProfileStorage::new(None);
+    let manifest = match storage.get_profile(&args.profile) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error loading profile '{}': {}", args.profile, e);
+            std::process::exit(1);
+        }
+    };
+
+    let mut granted_folders = Vec::new();
+    for mapping in &manifest.filesystem_mappings {
+        granted_folders.push(universalrun_sandbox::GrantedFolder {
+            host_path: PathBuf::from(&mapping.host_path),
+            container_path: mapping.guest_path.clone(),
+            read_only: mapping.read_only,
+        });
+    }
+
+    let policy = universalrun_sandbox::SandboxPolicy {
+        schema_version: "1.0.0".to_string(),
+        files: if granted_folders.is_empty() {
+            universalrun_sandbox::FilePermissionMode::Deny
+        } else {
+            universalrun_sandbox::FilePermissionMode::Allow
+        },
+        granted_folders,
+        network: manifest.permissions.network,
+        audio: manifest.permissions.audio,
+        microphone: false,
+        display: if manifest.permissions.display {
+            universalrun_sandbox::DisplayBackend::X11
+        } else {
+            universalrun_sandbox::DisplayBackend::Headless
+        },
+        gpu: manifest.permissions.dri,
+        camera: false,
+        usb: false,
+        system_access: false,
+    };
+
+    let p_dir = storage.profile_dir(&args.profile);
+    let prefix_dir = p_dir.join("prefix");
+    let ctx = universalrun_sandbox::SandboxContext {
+        policy: policy.clone(),
+        manifest: manifest.clone(),
+        host_wine_runtime: PathBuf::from("/usr/lib/wine"),
+        host_prefix_dir: prefix_dir,
+        host_scoped_xauth: if manifest.permissions.display {
+            Some(PathBuf::from("/tmp/xauth-scoped"))
+        } else {
+            None
+        },
+        host_wayland_socket: None,
+        host_pulse_socket: if manifest.permissions.audio {
+            Some(PathBuf::from("/run/user/1000/pulse/native"))
+        } else {
+            None
+        },
+    };
+
+    let backend = universalrun_sandbox::BwrapBackend::new();
+    let bwrap_args = match backend.build_args(&ctx) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("Error building sandbox arguments: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let bwrap_args_str: Vec<String> = bwrap_args
+        .iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect();
+
+    let enforcement = policy.enforcement_status();
+
+    if args.json {
+        let output = serde_json::json!({
+            "schema_version": "1.0.0",
+            "profile_id": args.profile,
+            "plan_only": true,
+            "notice": "PLAN ONLY: Bubblewrap arguments generated as data, nothing executed. Note: paths are illustrative until resolved on the target host.",
+            "bwrap_args": bwrap_args_str,
+            "enforcement_status": enforcement,
+        });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        println!("================================================================================");
+        println!(" UniversalRun Sandbox Plan: {}", args.profile);
+        println!("================================================================================");
+        println!("PLAN ONLY: Bubblewrap arguments generated as data, nothing executed.");
+        println!("Note: paths are illustrative until resolved on the target host.\n");
+
+        println!("Target App:        {}", manifest.target_app);
+        println!("Network:           {}", if manifest.permissions.network { "Allowed (--share-net)" } else { "Blocked (isolated netns)" });
+        println!("Audio:             {}", if manifest.permissions.audio { "Allowed (scoped socket)" } else { "Blocked" });
+        println!("Microphone:        CANNOT BE ENFORCED when audio is exposed (portal required)");
+        println!("Display:           {}", if manifest.permissions.display { "X11 (:0 scoped cookie) [Partial isolation]" } else { "Headless" });
+        println!("GPU / DRI:         {}", if manifest.permissions.dri { "Allowed (/dev/dri exposed) [Kernel driver attack surface]" } else { "Blocked" });
+
+        println!("\nEnforcement Matrix:");
+        let mut sorted_keys: Vec<_> = enforcement.keys().collect();
+        sorted_keys.sort();
+        for key in sorted_keys {
+            let (level, desc) = &enforcement[key];
+            println!("  - {:<12}: {:?} ({})", key, level, desc);
+        }
+
+        println!("\nGenerated Bubblewrap Argument Vector ({} arguments):", bwrap_args_str.len());
+        println!("  bwrap \\");
+        for (i, arg) in bwrap_args_str.iter().enumerate() {
+            if i + 1 < bwrap_args_str.len() {
+                println!("    {} \\", arg);
+            } else {
+                println!("    {}", arg);
+            }
+        }
+        println!();
+    }
+
     Ok(())
 }
 

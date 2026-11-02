@@ -1,0 +1,51 @@
+# AppArmor Profile for Bubblewrap in UniversalRun
+# Target: Ubuntu 24.04 LTS (kernel.apparmor_restrict_unprivileged_userns = 1)
+# Status: [UNTESTED ON LINUX]
+#
+# NOTE: Ubuntu 24.04 desktop may already ship /etc/apparmor.d/bwrap.
+# If user namespace restrictions prevent bwrap execution with:
+#   "bwrap: Setting up user namespace: Permission denied"
+# this profile or a local override in /etc/apparmor.d/local/bwrap must allow userns creation.
+
+#include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(attach_disconnected) {
+  #include <abstractions/base>
+
+  # Allow creating unprivileged user namespaces on Ubuntu 24.04
+  userns,
+
+  # Allow pivot_root and mount namespace manipulation required by bwrap
+  capability sys_admin,
+  capability sys_chroot,
+  capability setuid,
+  capability setgid,
+
+  # Mount permissions needed for container rootfs construction
+  mount,
+  umount,
+  pivot_root,
+
+  # Allow execution of helper binaries and wine inside container
+  /usr/bin/bwrap mr,
+  /usr/** rix,
+  /bin/** rix,
+  /lib/** mr,
+  /lib64/** mr,
+
+  # Read-only configuration files
+  /etc/** r,
+
+  # Allow tmpfs and devices inside namespace
+  /tmp/** rw,
+  /dev/** rw,
+  /proc/** rw,
+  /sys/** r,
+
+  # Application prefixes and data directories
+  /home/*/.local/share/universalrun/** rwk,
+  /var/data/universalrun/** rwk,
+
+  # Signal delivery
+  signal (send, receive),
+}
