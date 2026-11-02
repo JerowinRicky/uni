@@ -40,12 +40,12 @@
       "pattern": "^[a-f0-9]{64}$"
     },
     "architecture": {
-      "type": "string",
-      "enum": ["x86", "x64", "arm64", "unknown"]
+      "type": ["string", "null"],
+      "enum": ["x86", "x64", "arm64", "anycpu", "unknown", null]
     },
     "subsystem": {
-      "type": "string",
-      "enum": ["windows_gui", "windows_cui", "native", "posix_cui", "windows_ce_gui", "efi_application", "unknown"]
+      "type": ["string", "null"],
+      "enum": ["windows_gui", "windows_cui", "native", "posix_cui", "windows_ce_gui", "efi_application", "unknown", null]
     },
     "entry_point": {
       "type": ["integer", "null"]
@@ -85,14 +85,15 @@
         "signature_present": { "type": "boolean" },
         "file_hash_verified": { "type": ["boolean", "null"] },
         "chain_trust": { "type": "string", "enum": ["trusted", "untrusted", "unknown"] },
-        "publisher": { "type": ["string", "null"] }
+        "publisher": { "type": ["string", "null"] },
+        "note": { "type": ["string", "null"] }
       }
     },
     "installer_type": {
       "type": "object",
       "required": ["value", "confidence"],
       "properties": {
-        "value": { "type": "string", "enum": ["portable", "msi", "nsis", "inno_setup", "install_shield", "unknown"] },
+        "value": { "type": "string", "enum": ["portable", "msi", "msp", "nsis", "inno_setup", "install_shield", "unknown"] },
         "confidence": { "type": "string", "enum": ["certain", "likely", "unknown"] },
         "note": { "type": ["string", "null"] }
       }

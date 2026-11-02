@@ -140,3 +140,4 @@ pub fn create_synthetic_msi() -> Vec<u8> {
     }
     cursor.into_inner()
 }
+

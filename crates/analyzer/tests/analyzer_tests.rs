@@ -1,9 +1,9 @@
 mod fixtures_builder;
 
 use fixtures_builder::{create_synthetic_msi, PeBuilder};
+use universalrun_analyzer::analyze_bytes;
 use universalrun_analyzer::limits::AnalyzerLimits;
 use universalrun_analyzer::types::*;
-use universalrun_analyzer::analyze_bytes;
 
 #[test]
 fn test_synthetic_x64_gui_pe() {
@@ -14,8 +14,8 @@ fn test_synthetic_x64_gui_pe() {
         .expect("Should parse minimal x64 GUI PE");
 
     assert_eq!(report.schema_version, "1.0.0");
-    assert_eq!(report.architecture, Architecture::X64);
-    assert_eq!(report.subsystem, Subsystem::WindowsGui);
+    assert_eq!(report.architecture, Some(Architecture::X64));
+    assert_eq!(report.subsystem, Some(Subsystem::WindowsGui));
     assert_eq!(report.entry_point, Some(0x1000));
     assert_eq!(report.installer_type.value, InstallerKind::Portable);
     assert_eq!(report.installer_type.confidence, Confidence::Certain);
@@ -34,8 +34,8 @@ fn test_synthetic_x86_console_pe() {
     let report = analyze_bytes("test_x86_console.exe", &bytes, &limits)
         .expect("Should parse minimal x86 console PE");
 
-    assert_eq!(report.architecture, Architecture::X86);
-    assert_eq!(report.subsystem, Subsystem::WindowsCui);
+    assert_eq!(report.architecture, Some(Architecture::X86));
+    assert_eq!(report.subsystem, Some(Subsystem::WindowsCui));
     assert_eq!(report.installer_type.value, InstallerKind::Portable);
     assert_eq!(report.compatibility_rating.category, RatingCategory::Good);
 }
@@ -50,8 +50,12 @@ fn test_synthetic_msi_detection_via_cfb() {
 
     assert_eq!(report.installer_type.value, InstallerKind::Msi);
     assert_eq!(report.installer_type.confidence, Confidence::Certain);
-    assert_eq!(report.compatibility_rating.category, RatingCategory::Good);
-    assert!(report.compatibility_rating.evidence.iter().any(|e| e.contains("Standard MSI installer")));
+    // MSI architecture and subsystem must be null (None)
+    assert_eq!(report.architecture, None);
+    assert_eq!(report.subsystem, None);
+    // MSI rating must be capped at Partial until full staging
+    assert_eq!(report.compatibility_rating.category, RatingCategory::Partial);
+    assert!(report.compatibility_rating.evidence.iter().any(|e| e.contains("MSI package")));
 }
 
 #[test]
@@ -97,6 +101,8 @@ fn test_dotnet_detection() {
     assert_eq!(dotnet.flavor, DotNetFlavor::ModernDotNet);
     assert_eq!(dotnet.target_framework, Some(".NETCoreApp,Version=v8.0".to_string()));
     assert_eq!(dotnet.confidence, Confidence::Certain);
+    // Required runtimes must include .NET Runtime
+    assert!(report.required_runtimes.iter().any(|r| r.value.contains(".NET Runtime")));
 }
 
 #[test]
@@ -126,11 +132,8 @@ fn test_authenticode_three_state_reporting() {
 
     // Case 2: Present certificate block
     let mut cert_data = vec![0u8; 64];
-    // dwLength = 64
     cert_data[..4].copy_from_slice(&64u32.to_le_bytes());
-    // wRevision = 0x0200
     cert_data[4..6].copy_from_slice(&0x0200u16.to_le_bytes());
-    // wCertificateType = 0x0002 (PKCS_SIGNED_DATA)
     cert_data[6..8].copy_from_slice(&0x0002u16.to_le_bytes());
 
     let mut signed_pe = PeBuilder::x64_gui().with_security_cert(0x400, 64).build();
@@ -139,7 +142,6 @@ fn test_authenticode_three_state_reporting() {
     let report2 = analyze_bytes("signed_test.exe", &signed_pe, &limits).unwrap();
     assert!(report2.authenticode.signature_present);
     assert_eq!(report2.authenticode.chain_trust, ChainTrust::Unknown);
-    // Crucial rule: Never label "signed" on presence alone without chain trust!
 }
 
 #[test]
@@ -180,7 +182,6 @@ fn test_golden_json_output_conforms_to_schema() {
     let json_str = serde_json::to_string_pretty(&report).unwrap();
     let json_val: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-    // Verify key fields match schema expectations
     assert_eq!(json_val["schema_version"], "1.0.0");
     assert_eq!(json_val["file_name"], "golden_sample.exe");
     assert_eq!(json_val["architecture"], "x64");

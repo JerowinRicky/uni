@@ -51,3 +51,4 @@ Every report emits an explicit `unverifiable_aspects` list informing the user an
 - Clean separation of link-time facts from runtime heuristics.
 - No false guarantees about application safety or compatibility.
 - Fully memory-safe static analysis in pure Rust.
+

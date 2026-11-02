@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("UniversalRun Analysis Report");
                 println!("============================");
                 println!("Target: {}", report.file_name);
-                println!("Architecture: {}", report.architecture);
+                println!("Architecture: {}", report.architecture.map(|a| a.to_string()).unwrap_or_else(|| "null (installer)".to_string()));
                 println!("Installer: {:?}", report.installer_type.value);
                 println!("Rating: {:?} ({})", report.compatibility_rating.category, report.compatibility_rating.summary);
             }
@@ -40,3 +40,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+

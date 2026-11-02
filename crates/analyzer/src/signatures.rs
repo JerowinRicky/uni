@@ -9,6 +9,15 @@ use goblin::pe::PE;
 /// 3. chain_trust (defaults to Unknown until trust store verification is implemented)
 /// 4. publisher (extracted subject CN)
 pub fn analyze_authenticode(bytes: &[u8], pe: &PE) -> AuthenticodeReport {
+    let is_windows_system = bytes.windows(b"Microsoft Corporation".len()).any(|w| w == b"Microsoft Corporation")
+        || bytes.windows(b"Microsoft Windows".len()).any(|w| w == b"Microsoft Windows");
+
+    let note = if is_windows_system {
+        Some("Windows system component: authenticates via system catalog files (.cat) in CatRoot rather than embedded Authenticode signatures".to_string())
+    } else {
+        None
+    };
+
     let opt_header = match &pe.header.optional_header {
         Some(opt) => opt,
         None => {
@@ -17,6 +26,7 @@ pub fn analyze_authenticode(bytes: &[u8], pe: &PE) -> AuthenticodeReport {
                 file_hash_verified: None,
                 chain_trust: ChainTrust::Unknown,
                 publisher: None,
+                note,
             };
         }
     };
@@ -33,6 +43,7 @@ pub fn analyze_authenticode(bytes: &[u8], pe: &PE) -> AuthenticodeReport {
                 file_hash_verified: None,
                 chain_trust: ChainTrust::Unknown,
                 publisher: None,
+                note,
             };
         }
     };
@@ -44,6 +55,7 @@ pub fn analyze_authenticode(bytes: &[u8], pe: &PE) -> AuthenticodeReport {
             file_hash_verified: Some(false), // Corrupt/out-of-bounds security directory
             chain_trust: ChainTrust::Untrusted,
             publisher: None,
+            note: None,
         };
     }
 
@@ -54,6 +66,7 @@ pub fn analyze_authenticode(bytes: &[u8], pe: &PE) -> AuthenticodeReport {
             file_hash_verified: Some(false),
             chain_trust: ChainTrust::Untrusted,
             publisher: None,
+            note: None,
         };
     }
 
@@ -70,11 +83,10 @@ pub fn analyze_authenticode(bytes: &[u8], pe: &PE) -> AuthenticodeReport {
 
     AuthenticodeReport {
         signature_present: true,
-        // File hash verification requires full PE authentic-hash calculation against SpcIndirectDataContent
-        // We set to None unless verified with a cryptographic digest engine
         file_hash_verified: None,
         chain_trust: ChainTrust::Unknown,
         publisher,
+        note: None,
     }
 }
 

@@ -52,3 +52,4 @@ fn test_fuzz_smoke_arbitrary_inputs() {
         let _ = analyze_bytes("fuzz_input.bin", &buf, &limits);
     }
 }
+

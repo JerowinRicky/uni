@@ -66,18 +66,29 @@ pub fn analyze_bytes(
         "Windows Print Spooler and peripheral device communication".to_string(),
     ];
 
-    // 3. Check for PE format vs non-PE (e.g. MSI)
+    // 3. Check for PE format vs non-PE (e.g. MSI/MSP)
     let is_pe = bytes.len() >= 2 && &bytes[..2] == b"MZ";
-    let installer_analysis = installer::detect_installer(bytes, is_pe);
+    let installer_analysis = installer::detect_installer(bytes, file_name, is_pe);
 
-    // If it's an MSI compound file (not a standard PE)
-    if matches!(installer_analysis.kind.value, InstallerKind::Msi) && !is_pe {
+    // If it's an MSI or MSP compound file (not a standard PE)
+    if (matches!(installer_analysis.kind.value, InstallerKind::Msi) || matches!(installer_analysis.kind.value, InstallerKind::Msp)) && !is_pe {
+        let is_msp = matches!(installer_analysis.kind.value, InstallerKind::Msp);
+        let summary = if is_msp {
+            "Rated Partial: Windows Installer Patch (MSP). Installation requires target application prefix."
+        } else {
+            "Rated Partial: Windows Installer Package (MSI). Embedded tables, custom actions, and services require staging."
+        };
+
         let rating = CompatibilityRating {
-            category: RatingCategory::Good,
-            summary: "Rated Good: Microsoft Windows Installer package.".to_string(),
+            category: RatingCategory::Partial,
+            summary: summary.to_string(),
             evidence: vec![
                 "Static-only analysis cap: maximum assignable rating is Good".to_string(),
-                "Standard MSI installer container confirmed via CFBF and internal tables".to_string(),
+                if is_msp {
+                    "MSP patch package: static rating capped at Partial (requires target application prefix)".to_string()
+                } else {
+                    "MSI package: static rating capped at Partial (internal tables, custom actions, services, and embedded drivers require prefix execution)".to_string()
+                },
             ],
         };
 
@@ -86,8 +97,8 @@ pub fn analyze_bytes(
             file_name: file_name.to_string(),
             file_size_bytes,
             sha256,
-            architecture: Architecture::Unknown,
-            subsystem: Subsystem::WindowsGui,
+            architecture: None,
+            subsystem: None,
             entry_point: None,
             num_sections: 0,
             imports: Vec::new(),
@@ -98,6 +109,7 @@ pub fn analyze_bytes(
                 file_hash_verified: None,
                 chain_trust: ChainTrust::Unknown,
                 publisher: None,
+                note: None,
             },
             installer_type: installer_analysis.kind,
             installer_version: installer_analysis.version,
@@ -121,18 +133,31 @@ pub fn analyze_bytes(
 
     let pe_info = pe::parse_pe_info(bytes, &pe, limits);
     let authenticode = signatures::analyze_authenticode(bytes, &pe);
-    let dotnet = dotnet::analyze_dotnet(bytes, &pe);
+    let dotnet_analysis = dotnet::analyze_dotnet(bytes, &pe);
 
     let requests_admin = matches!(pe_info.execution_level.value, ExecutionLevel::RequireAdministrator);
-    let detected = detector::detect_attributes(bytes, &pe, requests_admin);
+    let mut detected = detector::detect_attributes(bytes, &pe, requests_admin);
+
+    // If .NET analysis found a required runtime, append it to required_runtimes
+    let mut dotnet_rt_name = None;
+    let dotnet_report = if let Some(dna) = &dotnet_analysis {
+        if let Some(rt) = &dna.required_runtime {
+            detected.required_runtimes.push(Finding::certain(rt.clone()));
+            dotnet_rt_name = Some(rt.as_str());
+        }
+        Some(dna.report.clone())
+    } else {
+        None
+    };
 
     let compatibility_rating = rating::compute_static_rating(
-        pe_info.architecture,
-        pe_info.subsystem,
+        Some(pe_info.architecture),
+        Some(pe_info.subsystem),
         &installer_analysis.kind,
         &detected.graphics_apis,
         &detected.security_flags,
         &pe_info.execution_level,
+        dotnet_rt_name,
     );
 
     Ok(AnalysisReport {
@@ -140,8 +165,8 @@ pub fn analyze_bytes(
         file_name: file_name.to_string(),
         file_size_bytes,
         sha256,
-        architecture: pe_info.architecture,
-        subsystem: pe_info.subsystem,
+        architecture: Some(pe_info.architecture),
+        subsystem: Some(pe_info.subsystem),
         entry_point: pe_info.entry_point,
         num_sections: pe_info.num_sections,
         imports: pe_info.imports,
@@ -150,7 +175,7 @@ pub fn analyze_bytes(
         authenticode,
         installer_type: installer_analysis.kind,
         installer_version: installer_analysis.version,
-        dotnet,
+        dotnet: dotnet_report,
         graphics_apis: detected.graphics_apis,
         required_runtimes: detected.required_runtimes,
         security_flags: detected.security_flags,

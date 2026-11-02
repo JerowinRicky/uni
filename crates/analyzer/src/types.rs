@@ -55,6 +55,8 @@ pub enum Architecture {
     X86,
     X64,
     Arm64,
+    #[serde(rename = "anycpu")]
+    AnyCPU,
     Unknown,
 }
 
@@ -64,6 +66,7 @@ impl std::fmt::Display for Architecture {
             Self::X86 => write!(f, "x86 (32-bit)"),
             Self::X64 => write!(f, "x86_64 (64-bit)"),
             Self::Arm64 => write!(f, "ARM64"),
+            Self::AnyCPU => write!(f, "AnyCPU (.NET IL)"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }
@@ -98,12 +101,15 @@ pub enum ExecutionLevel {
 pub struct AuthenticodeReport {
     /// Whether an Authenticode signature directory / PKCS#7 block is present.
     pub signature_present: bool,
-    /// Whether the file digest matches the signed digest. None if signature was unparsed.
+    /// Whether the file digest matches the signed digest.
+    /// Returns None (null in JSON) because Authentic-hash verification against SpcIndirectDataContent is NOT YET IMPLEMENTED.
     pub file_hash_verified: Option<bool>,
     /// Trust chain validation status against local or system trust store.
     pub chain_trust: ChainTrust,
     /// Extracted publisher / signer subject common name, if available.
     pub publisher: Option<String>,
+    /// Note for catalog-signed binaries (e.g. Windows system binaries signed via .cat files rather than embedded).
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,6 +126,7 @@ pub enum ChainTrust {
 pub enum InstallerKind {
     Portable,
     Msi,
+    Msp,
     Nsis,
     InnoSetup,
     InstallShield,
@@ -180,8 +187,8 @@ pub struct AnalysisReport {
     pub file_name: String,
     pub file_size_bytes: u64,
     pub sha256: String,
-    pub architecture: Architecture,
-    pub subsystem: Subsystem,
+    pub architecture: Option<Architecture>,
+    pub subsystem: Option<Subsystem>,
     pub entry_point: Option<u64>,
     pub num_sections: usize,
     pub imports: Vec<ImportSummary>,
