@@ -24,6 +24,7 @@ pub struct PiiScrubber {
     bearer_re: Regex,
     email_re: Regex,
     ip_re: Regex,
+    hostname_re: Regex,
     unc_re: Regex,
     prefix_user_re: Regex,
     home_user_re: Regex,
@@ -44,6 +45,9 @@ impl PiiScrubber {
 
             // IP address regex
             ip_re: Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").unwrap(),
+
+            // Hostname regex (supports multi-label internal/corp/local FQDNs)
+            hostname_re: Regex::new(r"(?i)\b[a-zA-Z0-9_.-]+\.(?:internal|corp|local|lan|home|localdomain)\b").unwrap(),
 
             // UNC path regex: \\server\share
             unc_re: Regex::new(r"\\\\[a-zA-Z0-9_.-]+\\[a-zA-Z0-9_.$ -]+").unwrap(),
@@ -71,11 +75,12 @@ impl PiiScrubber {
         // 2. Emails
         scrubbed = self.email_re.replace_all(&scrubbed, "<REDACTED_EMAIL>").into_owned();
 
-        // 3. IPs
-        scrubbed = self.ip_re.replace_all(&scrubbed, "<REDACTED_IP>").into_owned();
-
-        // 4. UNC paths
+        // 3. UNC paths (must precede hostname/IP to preserve \\server\share structure)
         scrubbed = self.unc_re.replace_all(&scrubbed, "<REDACTED_UNC>").into_owned();
+
+        // 4. IPs and Hostnames
+        scrubbed = self.ip_re.replace_all(&scrubbed, "<REDACTED_IP>").into_owned();
+        scrubbed = self.hostname_re.replace_all(&scrubbed, "<REDACTED_HOSTNAME>").into_owned();
 
         // 5. Usernames in prefix paths
         scrubbed = self.prefix_user_re.replace_all(&scrubbed, "${1}<REDACTED_USER>").into_owned();

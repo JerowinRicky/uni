@@ -5,7 +5,7 @@ description = "Install vcredist2022 into prefix to provide missing VC++ runtime 
 target_change = "Add 'vcredist2022' to profile dependencies"
 reversible = true
 risk_level = "low"
-status_note = "Standard verified redistributable"
+status_note = "Catalog hash status: unverified (TODO placeholder until verified hash is provided)"
 
 [missing_dotnet]
 id = "missing_dotnet"

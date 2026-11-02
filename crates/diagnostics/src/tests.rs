@@ -86,7 +86,7 @@ fn test_classify_missing_dependency() {
         .expect("classify");
 
     assert_eq!(report.category, DiagnosticCategory::MissingDependency);
-    assert_eq!(report.confidence, DiagnosticConfidence::Certain);
+    assert_eq!(report.confidence, DiagnosticConfidence::Likely);
     assert!(!report.evidence_lines.is_empty());
     assert!(report.evidence_lines.iter().any(|l| l.contains("msvcp140.dll")));
     assert!(report.recommended_fixes.iter().any(|f| f.id == "missing_vcredist"));
@@ -102,7 +102,7 @@ fn test_classify_missing_dll_or_api() {
         .expect("classify");
 
     assert_eq!(report.category, DiagnosticCategory::MissingDllOrApi);
-    assert_eq!(report.confidence, DiagnosticConfidence::Certain);
+    assert_eq!(report.confidence, DiagnosticConfidence::Likely);
     assert!(report.evidence_lines.iter().any(|l| l.contains("KERNEL32.dll")));
     assert!(report.recommended_fixes.iter().any(|f| f.id == "dll_native_override"));
 }
@@ -222,11 +222,23 @@ fn test_scrubbing_category_emails() {
 #[test]
 fn test_scrubbing_category_ips_and_hostnames() {
     let scrubber = PiiScrubber::new();
-    let input = "Failed to bind listening socket on 192.168.1.100 port 8080";
+    let input = "Failed to bind listening socket on 192.168.1.100 port 8080 or connect to database.corp.internal";
     let scrubbed = scrubber.scrub_text(input);
 
     assert!(!scrubbed.contains("192.168.1.100"));
-    assert_eq!(scrubbed, "Failed to bind listening socket on <REDACTED_IP> port 8080");
+    assert!(!scrubbed.contains("database.corp.internal"));
+    assert_eq!(scrubbed, "Failed to bind listening socket on <REDACTED_IP> port 8080 or connect to <REDACTED_HOSTNAME>");
+}
+
+#[test]
+fn test_scrubbing_category_hostnames() {
+    let scrubber = PiiScrubber::new();
+    let input = "Resolving backend server at auth-service.internal and storage.nas.lan for user sync";
+    let scrubbed = scrubber.scrub_text(input);
+
+    assert!(!scrubbed.contains("auth-service.internal"));
+    assert!(!scrubbed.contains("storage.nas.lan"));
+    assert!(scrubbed.contains("<REDACTED_HOSTNAME>"));
 }
 
 #[test]

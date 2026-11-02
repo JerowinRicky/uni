@@ -49,6 +49,29 @@ impl<'a> LogClassifier<'a> {
         let tail_start = lines.len().saturating_sub(TAIL_WINDOW_LINES);
         let tail_lines = &lines[tail_start..];
 
+        // Rule: Cap confidence at Likely unless two or more independent signals corroborate:
+        // Signal 1: explicit diagnostic error lines in log tail
+        // Signal 2: non-zero exit code
+        // Signal 3: abnormal process death/signal (exit code > 128)
+        let eval_confidence = |evidence: &[String]| -> DiagnosticConfidence {
+            let has_error_lines = !evidence.is_empty();
+            let has_nonzero_exit = exit_code.is_some() && exit_code != Some(0);
+            let has_death = match exit_code {
+                Some(c) if (129..=192).contains(&c) => true, // Abnormal process death (SIGSEGV=139, SIGKILL=137, SIGABRT=134)
+                _ => false,
+            };
+
+            if has_error_lines && has_nonzero_exit && has_death {
+                DiagnosticConfidence::Certain
+            } else if has_error_lines && has_nonzero_exit {
+                DiagnosticConfidence::Likely
+            } else if has_error_lines || has_nonzero_exit {
+                DiagnosticConfidence::Possible
+            } else {
+                DiagnosticConfidence::Unknown
+            }
+        };
+
         // 1. Missing Visual C++ or .NET Dependencies
         let mut dep_evidence = Vec::new();
         for &line in tail_lines {
@@ -63,9 +86,10 @@ impl<'a> LogClassifier<'a> {
         }
         if !dep_evidence.is_empty() {
             let fixes = self.catalog.lookup_fixes(DiagnosticCategory::MissingDependency, &dep_evidence);
+            let conf = eval_confidence(&dep_evidence);
             return Ok(DiagnosticReport {
                 category: DiagnosticCategory::MissingDependency,
-                confidence: DiagnosticConfidence::Certain,
+                confidence: conf,
                 summary: "Application failed due to missing runtime redistributable library (VC++ or .NET Framework CLR).".to_string(),
                 exit_code,
                 evidence_lines: dep_evidence,
@@ -89,9 +113,10 @@ impl<'a> LogClassifier<'a> {
         }
         if !dll_evidence.is_empty() {
             let fixes = self.catalog.lookup_fixes(DiagnosticCategory::MissingDllOrApi, &dll_evidence);
+            let conf = eval_confidence(&dll_evidence);
             return Ok(DiagnosticReport {
                 category: DiagnosticCategory::MissingDllOrApi,
-                confidence: DiagnosticConfidence::Certain,
+                confidence: conf,
                 summary: "Application failed to start because a required Win32 DLL or API procedure entry point was missing.".to_string(),
                 exit_code,
                 evidence_lines: dll_evidence,
@@ -117,9 +142,10 @@ impl<'a> LogClassifier<'a> {
         }
         if !gfx_evidence.is_empty() {
             let fixes = self.catalog.lookup_fixes(DiagnosticCategory::GraphicsError, &gfx_evidence);
+            let conf = eval_confidence(&gfx_evidence);
             return Ok(DiagnosticReport {
                 category: DiagnosticCategory::GraphicsError,
-                confidence: DiagnosticConfidence::Likely,
+                confidence: conf,
                 summary: "Graphics rendering or display server initialization failed.".to_string(),
                 exit_code,
                 evidence_lines: gfx_evidence,
@@ -142,9 +168,10 @@ impl<'a> LogClassifier<'a> {
         }
         if !perm_evidence.is_empty() {
             let fixes = self.catalog.lookup_fixes(DiagnosticCategory::PermissionDenial, &perm_evidence);
+            let conf = eval_confidence(&perm_evidence);
             return Ok(DiagnosticReport {
                 category: DiagnosticCategory::PermissionDenial,
-                confidence: DiagnosticConfidence::Likely,
+                confidence: conf,
                 summary: "Application attempted an operation forbidden by sandbox permission policy.".to_string(),
                 exit_code,
                 evidence_lines: perm_evidence,
@@ -166,9 +193,10 @@ impl<'a> LogClassifier<'a> {
             }
         }
         if !crash_evidence.is_empty() {
+            let conf = eval_confidence(&crash_evidence);
             return Ok(DiagnosticReport {
                 category: DiagnosticCategory::StartupCrash,
-                confidence: DiagnosticConfidence::Certain,
+                confidence: conf,
                 summary: "Application crashed due to unhandled Win32 exception (Access Violation / Page Fault).".to_string(),
                 exit_code,
                 evidence_lines: crash_evidence,
@@ -200,9 +228,10 @@ impl<'a> LogClassifier<'a> {
             }
         }
         if !installer_evidence.is_empty() {
+            let conf = eval_confidence(&installer_evidence);
             return Ok(DiagnosticReport {
                 category: DiagnosticCategory::InstallerFailure,
-                confidence: DiagnosticConfidence::Likely,
+                confidence: conf,
                 summary: "Application installer package encountered an internal installation failure.".to_string(),
                 exit_code,
                 evidence_lines: installer_evidence,
