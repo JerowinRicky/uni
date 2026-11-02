@@ -31,6 +31,7 @@ fn sample_manifest(id: &str, revision: u32) -> ProfileManifest {
         dll_overrides: overrides,
         filesystem_mappings: Vec::new(),
         permissions: PermissionPolicy::default(),
+        wine_debug: None,
         rebuild_hash: None,
     }
 }

@@ -49,3 +49,4 @@ profile bwrap /usr/bin/bwrap flags=(attach_disconnected) {
   # Signal delivery
   signal (send, receive),
 }
+

@@ -306,6 +306,7 @@ fn test_scrubbing_category_manifest_host_paths() {
             read_only: false,
         }],
         permissions: PermissionPolicy::default(),
+        wine_debug: None,
         rebuild_hash: None,
     };
 
@@ -345,6 +346,7 @@ fn test_bundle_builder_refuses_overwrite_and_enforces_caps() {
         dll_overrides: HashMap::new(),
         filesystem_mappings: Vec::new(),
         permissions: PermissionPolicy::default(),
+        wine_debug: None,
         rebuild_hash: None,
     };
 

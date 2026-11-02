@@ -24,10 +24,11 @@ Bubblewrap arguments are synthesized strictly as typed `Vec<OsString>` data stru
 | `--proc /proc` | Mounts a fresh, unshared `/proc` pseudo-filesystem revealing only processes inside the sandbox PID namespace. | Unit-tested (UNTESTED ON LINUX) |
 | `--dev /dev` | Mounts a minimal, isolated `/dev` tmpfs populated with safe standard nodes (`null`, `zero`, `full`, `random`, `urandom`, `tty`, `ptmx`). Host `/dev` is NEVER bound. | Unit-tested (UNTESTED ON LINUX) |
 | `--tmpfs /tmp` | Mounts a clean `tmpfs` at `/tmp`. **Must be declared BEFORE mounting any X11 or audio sockets under `/tmp`**. | Unit-tested (UNTESTED ON LINUX) |
-| `--ro-bind-try /usr`, `/lib`, `/lib64`, `/bin`, `/sbin` | Read-only mounts of host binary runtimes, conforming to usr-merged Linux distributions. | Unit-tested (UNTESTED ON LINUX) |
+| `--ro-bind-try /usr /usr` | Read-only mount of host `/usr`. | Unit-tested (UNTESTED ON LINUX) |
+| `--symlink usr/bin /bin`, `usr/sbin /sbin`, `usr/lib /lib`, `usr/lib64 /lib64` | Symlinks for standard system paths conforming to usr-merged Linux distributions without binding over host symlinks. | Unit-tested (UNTESTED ON LINUX) |
 | Specific `/etc` binds (`ld.so.cache`, `fonts`, `machine-id`, `resolv.conf`) | Binds narrow, specific files only. **Never mounts all of `/etc`** to prevent exposing sensitive files like `/etc/shadow` or `/etc/sudoers`. | Unit-tested (UNTESTED ON LINUX) |
 | Specific `/etc/ssl`, `/etc/pki`, `/etc/ca-certificates` | Read-only binds for root certificates, mounted **only when network access is enabled**. | Unit-tested (UNTESTED ON LINUX) |
-| `--ro-bind <runtime> /usr/lib/wine` | Pinned Wine runtime mount, strictly read-only. | Unit-tested (UNTESTED ON LINUX) |
+| `--ro-bind <runtime> /runtime` | Pinned Wine runtime mount, strictly read-only. PATH, WINESERVER, and entrypoint point directly to `/runtime/bin`. | Unit-tested (UNTESTED ON LINUX) |
 | `--bind <prefix> /wineprefix` | The application Wine prefix. **This is the ONLY writable application directory inside the container**. | Unit-tested (UNTESTED ON LINUX) |
 | `--dev-bind-try /dev/dri` | Direct Rendering Infrastructure device nodes, bound **only when GPU access is granted**. | Unit-tested (UNTESTED ON LINUX) |
 | `--ro-bind-try /sys/dev/char`, `/sys/devices` | Narrow sysfs paths required by Vulkan/OpenGL user-space drivers (Mesa, NVIDIA), bound **only when GPU access is granted**. | Unit-tested (UNTESTED ON LINUX) |
@@ -64,3 +65,5 @@ Wine translates Windows NT system calls into POSIX user-space calls. Any Windows
 ### 2.6 Known First-Run Linux Risks
 - **X11 Abstract Sockets**: Under `--unshare-all`, bubblewrap creates a new network namespace. In X11, abstract sockets (`@/tmp/.X11-unix/X0`) live in the network namespace and become unreachable once the network namespace is unshared. Testing on Linux must verify whether the host X server listens on filesystem sockets (`/tmp/.X11-unix/X0`) or abstract sockets.
 - **systemd-resolved symlink**: `/etc/resolv.conf` on modern systemd distributions is often a symlink to `/run/systemd/resolve/stub-resolv.conf`. Binding only `/etc/resolv.conf` without `/run/systemd/resolve` can result in a dangling symlink.
+- **usr-merge symlinks vs non-merged hosts**: Modern Linux distributions (Debian, Ubuntu 22.04+, Arch, Fedora) merge `/bin`, `/sbin`, `/lib`, `/lib64` into `/usr`. UniversalRun constructs symlinks (`--symlink usr/bin /bin`, etc.) rather than bind-mounting over host symlinks to avoid `EBUSY` or mount point confusion. Non-merged legacy hosts will require detection of whether `/bin` is a real directory or a symlink.
+

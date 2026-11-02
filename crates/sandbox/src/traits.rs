@@ -10,3 +10,4 @@ pub trait SandboxBackend: Send + Sync {
     /// Spawn sandboxed process.
     fn spawn(&self, args: &[OsString]) -> Result<u32>;
 }
+

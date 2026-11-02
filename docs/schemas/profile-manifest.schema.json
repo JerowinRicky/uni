@@ -97,6 +97,10 @@
         "dri": { "type": "boolean" }
       }
     },
+    "wine_debug": {
+      "type": ["string", "null"],
+      "description": "Wine debug channel configuration. Defaults to fixme-all so err: lines reach diagnostics."
+    },
     "rebuild_hash": {
       "type": ["string", "null"],
       "pattern": "^[a-fA-F0-9]{64}$"

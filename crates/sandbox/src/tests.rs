@@ -30,6 +30,7 @@ fn sample_manifest() -> ProfileManifest {
         dll_overrides: HashMap::new(),
         filesystem_mappings: vec![],
         permissions: ProfilePermissionPolicy::default(),
+        wine_debug: None,
         rebuild_hash: Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()),
     }
 }
@@ -40,6 +41,7 @@ fn sample_context(policy: SandboxPolicy) -> SandboxContext {
         manifest: sample_manifest(),
         host_wine_runtime: PathBuf::from("/opt/universalrun/runtimes/wine-9.0"),
         host_prefix_dir: PathBuf::from("/var/data/universalrun/prefixes/test-app"),
+        host_x11_display: Some(":0".to_string()),
         host_scoped_xauth: Some(PathBuf::from("/tmp/xauth_test")),
         host_wayland_socket: Some(PathBuf::from("/run/user/1000/wayland-0")),
         host_pulse_socket: Some(PathBuf::from("/run/user/1000/pulse/native")),
@@ -147,6 +149,47 @@ fn test_rejection_rule_sensitive_user_credentials() {
     assert!(check_granted_folder_safety(Path::new("/srv/appdata")).is_ok());
 }
 
+#[test]
+fn test_rejection_rule_granted_folder_roots() {
+    let forbidden = ["/", "/home", "/run", "/var", "/root", "/proc", "/sys", "/dev"];
+    for root in &forbidden {
+        assert!(
+            check_granted_folder_safety(Path::new(root)).is_err(),
+            "Expected granted folder safety to reject root '{}'",
+            root
+        );
+    }
+}
+
+#[test]
+fn test_granted_folder_default_is_read_only() {
+    let folder = GrantedFolder::default();
+    assert!(
+        folder.read_only,
+        "GrantedFolder default must be read-only for least-privilege security"
+    );
+}
+
+#[test]
+fn test_spawn_time_canonicalization_rejects_symlinks_to_forbidden_targets() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _link_path = tmp.path().join("evil_symlink");
+
+    #[cfg(unix)]
+    {
+        let _ = std::os::unix::fs::symlink("/root", &_link_path);
+        if _link_path.exists() {
+            assert!(check_granted_folder_safety(&_link_path).is_err());
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        // Path safety check on root paths
+        assert!(check_granted_folder_safety(Path::new("/root")).is_err());
+    }
+}
+
 // ============================================================================
 // 2. GOLDEN SNAPSHOT TESTS FOR BWRAP ARGUMENT VECTORS
 // ============================================================================
@@ -179,19 +222,41 @@ fn test_golden_default_policy_arguments() {
     let home_idx = args_str.iter().position(|r| r == "HOME").unwrap();
     assert_eq!(args_str[home_idx + 1], "/wineprefix");
 
+    // WINEDEBUG defaults to fixme-all (not -all) so err: reaches diagnostics
+    let winedebug_idx = args_str.iter().position(|r| r == "WINEDEBUG").unwrap();
+    assert_eq!(args_str[winedebug_idx + 1], "fixme-all");
+
+    // PATH and WINESERVER point to /runtime/bin
+    let path_idx = args_str.iter().position(|r| r == "PATH").unwrap();
+    assert_eq!(args_str[path_idx + 1], "/runtime/bin:/usr/bin:/bin");
+    let wineserver_idx = args_str.iter().position(|r| r == "WINESERVER").unwrap();
+    assert_eq!(args_str[wineserver_idx + 1], "/runtime/bin/wineserver");
+
     // Tmpfs ordering: --tmpfs /tmp MUST appear before X11 socket bind
     let tmpfs_idx = args_str.iter().position(|r| r == "--tmpfs").unwrap();
     assert_eq!(args_str[tmpfs_idx + 1], "/tmp");
     let x11_idx = args_str.iter().position(|r| r == "/tmp/.X11-unix/X0").unwrap();
     assert!(tmpfs_idx < x11_idx, "tmpfs must be mounted before binds under /tmp");
 
-    // Pinned Wine runtime and prefix
-    assert!(args_str.contains(&"/opt/universalrun/runtimes/wine-9.0".to_string()));
+    // Usr-merge symlinks
+    assert!(args_str.contains(&"--symlink".to_string()));
+    assert!(args_str.contains(&"usr/bin".to_string()));
+
+    // Pinned Wine runtime mounted to /runtime (no redundant /usr/lib/wine bind)
+    let runtime_idx = args_str
+        .iter()
+        .position(|r| r == "/opt/universalrun/runtimes/wine-9.0")
+        .unwrap();
+    assert_eq!(args_str[runtime_idx - 1], "--ro-bind");
+    assert_eq!(args_str[runtime_idx + 1], "/runtime");
+    assert!(!args_str.contains(&"/usr/lib/wine".to_string()));
+
+    // Prefix mount
     assert!(args_str.contains(&"/var/data/universalrun/prefixes/test-app".to_string()));
 
     // Terminating wine execution
     assert_eq!(args_str[args_str.len() - 3], "--");
-    assert_eq!(args_str[args_str.len() - 2], "/usr/lib/wine/bin/wine");
+    assert_eq!(args_str[args_str.len() - 2], "/runtime/bin/wine");
     assert_eq!(args_str[args_str.len() - 1], "C:\\app.exe");
 }
 

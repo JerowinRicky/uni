@@ -39,6 +39,16 @@ pub struct GrantedFolder {
     pub read_only: bool,
 }
 
+impl Default for GrantedFolder {
+    fn default() -> Self {
+        Self {
+            host_path: PathBuf::new(),
+            container_path: String::new(),
+            read_only: true, // Least-privilege default
+        }
+    }
+}
+
 /// Comprehensive hardware and resource sandbox policy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SandboxPolicy {
@@ -164,3 +174,4 @@ impl SandboxPolicy {
         status
     }
 }
+

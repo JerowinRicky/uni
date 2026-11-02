@@ -82,6 +82,9 @@ pub struct ProfileManifest {
     pub dll_overrides: HashMap<String, DllOverrideMode>,
     pub filesystem_mappings: Vec<FsMapping>,
     pub permissions: PermissionPolicy,
+    /// Wine debug channel settings (defaults to "fixme-all").
+    #[serde(default)]
+    pub wine_debug: Option<String>,
     /// Hash of canonical manifest fields guaranteeing deterministic reproducibility.
     pub rebuild_hash: Option<String>,
 }

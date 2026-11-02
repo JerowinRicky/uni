@@ -278,6 +278,7 @@ fn handle_plan(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
         dll_overrides: recipe.dll_overrides.clone(),
         filesystem_mappings: Vec::new(),
         permissions: recipe.permissions.clone(),
+        wine_debug: None,
         rebuild_hash: None,
     };
 
@@ -530,13 +531,43 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
 
     let p_dir = storage.profile_dir(&args.profile);
     let prefix_dir = p_dir.join("prefix");
+
+    // Runtime directory from pinned configuration
+    let runtimes_dir = storage
+        .root_dir()
+        .parent()
+        .unwrap_or_else(|| storage.root_dir())
+        .join("runtimes");
+    let runtime_path = runtimes_dir.join(format!(
+        "{}-{}",
+        manifest.runtime.name, manifest.runtime.version
+    ));
+
+    // Derive display from host environment or default to :0
+    let host_display = std::env::var("DISPLAY").ok().or_else(|| Some(":0".to_string()));
+
+    // Create scoped Xauthority directory with private permissions (0700 on Unix)
+    let xauth_dir = tempfile::Builder::new()
+        .prefix("universalrun-xauth-")
+        .tempdir()?;
+    let xauth_cookie_path = xauth_dir.path().join("xauth_cookie");
+    fs::write(&xauth_cookie_path, b"UNIVERSALRUN_SCOPED_XAUTH_COOKIE_BYTES")?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(xauth_dir.path(), fs::Permissions::from_mode(0o700));
+        let _ = fs::set_permissions(&xauth_cookie_path, fs::Permissions::from_mode(0o600));
+    }
+
     let ctx = universalrun_sandbox::SandboxContext {
         policy: policy.clone(),
         manifest: manifest.clone(),
-        host_wine_runtime: PathBuf::from("/usr/lib/wine"),
-        host_prefix_dir: prefix_dir,
+        host_wine_runtime: runtime_path.clone(),
+        host_prefix_dir: prefix_dir.clone(),
+        host_x11_display: host_display.clone(),
         host_scoped_xauth: if manifest.permissions.display {
-            Some(PathBuf::from("/tmp/xauth-scoped"))
+            Some(xauth_cookie_path)
         } else {
             None
         },
@@ -564,12 +595,26 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
 
     let enforcement = policy.enforcement_status();
 
+    // Derive top summary lines directly from enforcement_status to guarantee zero contradiction
+    let (net_lvl, net_desc) = &enforcement["network"];
+    let (audio_lvl, audio_desc) = &enforcement["audio"];
+    let (mic_lvl, mic_desc) = &enforcement["microphone"];
+    let (disp_lvl, disp_desc) = &enforcement["display"];
+    let (gpu_lvl, gpu_desc) = &enforcement["gpu"];
+
     if args.json {
         let output = serde_json::json!({
             "schema_version": "1.0.0",
             "profile_id": args.profile,
             "plan_only": true,
             "notice": "PLAN ONLY: Bubblewrap arguments generated as data, nothing executed. Note: paths are illustrative until resolved on the target host.",
+            "target_app": manifest.target_app,
+            "prefix_layout": {
+                "prefix_root": prefix_dir.to_string_lossy(),
+                "wine_c_drive": format!("{}/drive_c", prefix_dir.to_string_lossy()),
+                "app_entry": format!("{}/drive_c/{}", prefix_dir.to_string_lossy(), manifest.target_app),
+            },
+            "filesystem_mappings": manifest.filesystem_mappings,
             "bwrap_args": bwrap_args_str,
             "enforcement_status": enforcement,
         });
@@ -582,11 +627,29 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
         println!("Note: paths are illustrative until resolved on the target host.\n");
 
         println!("Target App:        {}", manifest.target_app);
-        println!("Network:           {}", if manifest.permissions.network { "Allowed (--share-net)" } else { "Blocked (isolated netns)" });
-        println!("Audio:             {}", if manifest.permissions.audio { "Allowed (scoped socket)" } else { "Blocked" });
-        println!("Microphone:        CANNOT BE ENFORCED when audio is exposed (portal required)");
-        println!("Display:           {}", if manifest.permissions.display { "X11 (:0 scoped cookie) [Partial isolation]" } else { "Headless" });
-        println!("GPU / DRI:         {}", if manifest.permissions.dri { "Allowed (/dev/dri exposed) [Kernel driver attack surface]" } else { "Blocked" });
+        println!("Network:           {:?} ({})", net_lvl, net_desc);
+        println!("Audio:             {:?} ({})", audio_lvl, audio_desc);
+        println!("Microphone:        {:?} ({})", mic_lvl, mic_desc);
+        println!("Display:           {:?} ({})", disp_lvl, disp_desc);
+        println!("GPU / DRI:         {:?} ({})", gpu_lvl, gpu_desc);
+
+        println!("\nApplication Files & Prefix Layout:");
+        println!("  - Wine Prefix Root:    {}", prefix_dir.display());
+        println!("  - Windows Drive C:     {}/drive_c", prefix_dir.display());
+        println!("  - Application Binary:  {}/drive_c/{}", prefix_dir.display(), manifest.target_app);
+        if manifest.filesystem_mappings.is_empty() {
+            println!("  - Granted Data Folders: None configured (isolated prefix only)");
+        } else {
+            println!("  - Granted Data Folders:");
+            for mapping in &manifest.filesystem_mappings {
+                println!(
+                    "      Host: {} -> Container: {} [{}]",
+                    mapping.host_path,
+                    mapping.guest_path,
+                    if mapping.read_only { "Read-Only" } else { "Read-Write" }
+                );
+            }
+        }
 
         println!("\nEnforcement Matrix:");
         let mut sorted_keys: Vec<_> = enforcement.keys().collect();

@@ -14,6 +14,8 @@ pub struct SandboxContext {
     pub host_wine_runtime: PathBuf,
     /// Absolute host path to the application's isolated wine prefix.
     pub host_prefix_dir: PathBuf,
+    /// Host DISPLAY string (e.g. ":0", ":1").
+    pub host_x11_display: Option<String>,
     /// Path to scoped Xauthority cookie (when X11 enabled).
     pub host_scoped_xauth: Option<PathBuf>,
     /// Path to Wayland socket (when Wayland enabled).
@@ -84,15 +86,20 @@ impl BwrapBackend {
 
         args.push("--setenv".into());
         args.push("PATH".into());
-        args.push("/usr/lib/wine/bin:/usr/bin:/bin".into());
+        args.push("/runtime/bin:/usr/bin:/bin".into());
 
         args.push("--setenv".into());
         args.push("WINESERVER".into());
-        args.push("/usr/lib/wine/bin/wineserver".into());
+        args.push("/runtime/bin/wineserver".into());
 
         args.push("--setenv".into());
         args.push("WINEDEBUG".into());
-        args.push("-all,fixme-all".into());
+        let wine_debug = ctx
+            .manifest
+            .wine_debug
+            .as_deref()
+            .unwrap_or("fixme-all");
+        args.push(wine_debug.into());
 
         // DLL overrides from profile
         if !ctx.manifest.dll_overrides.is_empty() {
@@ -111,9 +118,10 @@ impl BwrapBackend {
         // Display environment
         match ctx.policy.display {
             DisplayBackend::X11 => {
+                let display_str = ctx.host_x11_display.as_deref().unwrap_or(":0");
                 args.push("--setenv".into());
                 args.push("DISPLAY".into());
-                args.push(":0".into());
+                args.push(display_str.into());
 
                 args.push("--setenv".into());
                 args.push("XAUTHORITY".into());
@@ -158,21 +166,22 @@ impl BwrapBackend {
         args.push("/usr".into());
         args.push("/usr".into());
 
-        args.push("--ro-bind-try".into());
-        args.push("/lib".into());
-        args.push("/lib".into());
-
-        args.push("--ro-bind-try".into());
-        args.push("/lib64".into());
-        args.push("/lib64".into());
-
-        args.push("--ro-bind-try".into());
-        args.push("/bin".into());
+        // Usr-merge symlinks (avoid bind-mounting over host symlinks)
+        args.push("--symlink".into());
+        args.push("usr/bin".into());
         args.push("/bin".into());
 
-        args.push("--ro-bind-try".into());
+        args.push("--symlink".into());
+        args.push("usr/sbin".into());
         args.push("/sbin".into());
-        args.push("/sbin".into());
+
+        args.push("--symlink".into());
+        args.push("usr/lib".into());
+        args.push("/lib".into());
+
+        args.push("--symlink".into());
+        args.push("usr/lib64".into());
+        args.push("/lib64".into());
 
         // Specific /etc files (NEVER mount whole /etc)
         args.push("--ro-bind-try".into());
@@ -209,7 +218,7 @@ impl BwrapBackend {
         // 5. Pinned Wine Runtime Mount (Read-Only)
         args.push("--ro-bind".into());
         args.push(ctx.host_wine_runtime.as_os_str().to_os_string());
-        args.push("/usr/lib/wine".into());
+        args.push("/runtime".into());
 
         // 6. Application Prefix Mount (The ONLY writable app location)
         args.push("--bind".into());
@@ -235,10 +244,16 @@ impl BwrapBackend {
         // 8. Display socket bindings
         match ctx.policy.display {
             DisplayBackend::X11 => {
-                // Bind specific X11 socket (never whole /tmp/.X11-unix)
+                let display_str = ctx.host_x11_display.as_deref().unwrap_or(":0");
+                let display_num = display_str
+                    .trim_start_matches(':')
+                    .split('.')
+                    .next()
+                    .unwrap_or("0");
+                let socket_path = format!("/tmp/.X11-unix/X{}", display_num);
                 args.push("--ro-bind-try".into());
-                args.push("/tmp/.X11-unix/X0".into());
-                args.push("/tmp/.X11-unix/X0".into());
+                args.push(socket_path.clone().into());
+                args.push(socket_path.into());
 
                 if let Some(xauth) = &ctx.host_scoped_xauth {
                     args.push("--ro-bind-try".into());
@@ -278,7 +293,7 @@ impl BwrapBackend {
 
         // 11. Command terminator and entry point
         args.push("--".into());
-        args.push("/usr/lib/wine/bin/wine".into());
+        args.push("/runtime/bin/wine".into());
         args.push(format!("C:\\{}", ctx.manifest.target_app).into());
 
         Ok(args)

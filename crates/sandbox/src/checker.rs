@@ -136,8 +136,19 @@ pub fn check_granted_folder_safety(path: &Path) -> Result<()> {
     check_no_home_mount(path)?;
     check_no_parent_traversal(path)?;
 
-    let s = path.to_string_lossy().replace('\\', "/");
-    let forbidden_roots = ["/run", "/var", "/root", "/proc", "/sys", "/boot", "/dev"];
+    // Spawn-time canonicalization: if the path exists on disk, inspect its canonical target
+    let effective_path = if let Ok(canonical) = path.canonicalize() {
+        canonical
+    } else {
+        path.to_path_buf()
+    };
+
+    check_no_root_mount(&effective_path)?;
+    check_no_home_mount(&effective_path)?;
+    check_no_parent_traversal(&effective_path)?;
+
+    let s = effective_path.to_string_lossy().replace('\\', "/");
+    let forbidden_roots = ["/home", "/run", "/var", "/root", "/proc", "/sys", "/boot", "/dev"];
     for root in &forbidden_roots {
         if s == *root || s == format!("{}/", root) {
             return Err(UniversalRunError::Sandbox(format!(
@@ -172,3 +183,4 @@ pub fn validate_sandbox_policy(policy: &SandboxPolicy) -> Result<()> {
     }
     Ok(())
 }
+
