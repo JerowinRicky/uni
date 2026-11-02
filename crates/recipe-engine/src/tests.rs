@@ -34,6 +34,7 @@ fn sample_recipe(id: &str, revision: u32) -> Recipe {
             architecture: "win64".to_string(),
             windows_version: "win10".to_string(),
         },
+        dotnet_runtime: crate::types::DotNetRuntimeStrategy::None,
         dependencies: vec!["vcredist2022".to_string()],
         dll_overrides: overrides,
         registry_entries: Vec::new(),
@@ -111,6 +112,30 @@ fn test_security_rule_signature_verification_and_tampering() {
         sig.key_id = "unknown-rogue-key".to_string();
     }
     assert!(verify_recipe(&rogue_key, None, &registry).is_err(), "Unknown key ID must be rejected");
+}
+
+#[test]
+fn test_security_rule_dev_key_policy() {
+    let registry = KeyRegistry::new();
+    let mut recipe = sample_recipe("dev-key-app", 1);
+    recipe.signature = Some(RecipeSignature {
+        key_id: crate::verifier::DEV_KEY_ID.to_string(),
+        signature_hex: "00".repeat(64),
+    });
+
+    #[cfg(not(debug_assertions))]
+    {
+        let res = verify_recipe(&recipe, None, &registry);
+        assert!(res.is_err(), "Release builds must strictly reject ur-dev-key signatures");
+        assert!(res.unwrap_err().to_string().contains("forbidden in production"));
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        // In debug builds, verify_recipe continues to cryptographic check (which fails on dummy signature)
+        let res = verify_recipe(&recipe, None, &registry);
+        assert!(res.is_err(), "Dummy signature must fail Dalek verification");
+    }
 }
 
 #[test]

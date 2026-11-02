@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "test-notepad",
+  "display_name": "Test Notepad",
+  "target_app": "notepad.exe",
+  "target_app_sha256": null,
+  "recipe_id": null,
+  "recipe_revision": 1,
+  "runtime": {
+    "name": "wine",
+    "version": "9.0",
+    "architecture": "win64",
+    "windows_version": "win10"
+  },
+  "dependencies": [],
+  "env_vars": {
+    "SECRET_API_TOKEN": "secret_token_12345",
+    "PATH": "/usr/bin:/bin",
+    "WINEPREFIX": "C:\\drive_c\\users\\alice\\AppData"
+  },
+  "dll_overrides": {},
+  "filesystem_mappings": [
+    {
+      "host_path": "C:\\Windows\\notepad.exe",
+      "guest_path": "C:\\notepad.exe",
+      "read_only": true
+    }
+  ],
+  "permissions": {
+    "network": false,
+    "audio": true,
+    "display": true,
+    "dri": true
+  },
+  "rebuild_hash": null
+}

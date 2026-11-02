@@ -27,6 +27,38 @@ enum Commands {
     Plan(PlanArgs),
     /// Manage isolated per-application profiles
     Profile(ProfileArgs),
+    /// Classify failure signatures and recommend declarative fixes from execution logs
+    Diagnose(DiagnoseArgs),
+    /// Build a privacy-scrubbed diagnostic bug reporting bundle
+    Bundle(BundleArgs),
+}
+
+#[derive(Args)]
+struct DiagnoseArgs {
+    /// Path to execution log file
+    logfile: PathBuf,
+
+    /// Process exit code
+    #[arg(long)]
+    exit_code: Option<i32>,
+
+    /// Output report as JSON
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Args)]
+struct BundleArgs {
+    /// Path to raw execution log file
+    logfile: PathBuf,
+
+    /// Name or ID of configured application profile
+    #[arg(long)]
+    profile: String,
+
+    /// Destination directory for diagnostic bundle
+    #[arg(long)]
+    out: PathBuf,
 }
 
 #[derive(Args)]
@@ -96,6 +128,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Analyze(args) => handle_analyze(args),
         Commands::Plan(args) => handle_plan(args),
         Commands::Profile(args) => handle_profile(args),
+        Commands::Diagnose(args) => handle_diagnose(args),
+        Commands::Bundle(args) => handle_bundle(args),
     }
 }
 
@@ -256,6 +290,7 @@ fn handle_plan(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
         println!("SHA-256 Digest:     {}", report.sha256);
         println!("Matched Recipe:     {} (type: {})", recipe.id, match_result.match_type());
         println!("Recipe Revision:    {}", recipe.revision);
+        println!(".NET Strategy:      {:?}", recipe.dotnet_runtime);
         println!("Runtime Backend:    {} (arch: {}, winver: {})",
             recipe.runtime.preferred, recipe.runtime.architecture, recipe.runtime.windows_version
         );
@@ -270,7 +305,12 @@ fn handle_plan(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     "UNVERIFIED (hash: TODO - resolver will refuse download)"
                 };
-                println!("  - {} v{} [{}] (URL: {})", dep.id, dep.version, status, dep.source_url);
+                let url_display = if dep.is_verified {
+                    format!("URL: {}", dep.source_url)
+                } else {
+                    format!("[UNVERIFIED URL: {}]", dep.source_url)
+                };
+                println!("  - {} v{} [{}] ({})", dep.id, dep.version, status, url_display);
             }
         }
 
@@ -348,6 +388,89 @@ fn handle_profile(args: ProfileArgs) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+fn handle_diagnose(args: DiagnoseArgs) -> Result<(), Box<dyn std::error::Error>> {
+    if !args.logfile.exists() {
+        eprintln!("Error: log file '{}' does not exist", args.logfile.display());
+        std::process::exit(1);
+    }
+
+    let catalog_path = PathBuf::from("diagnostics/catalog/fixes.toml");
+    let catalog = if catalog_path.exists() {
+        universalrun_diagnostics::FixCatalog::from_file(&catalog_path)?
+    } else {
+        universalrun_diagnostics::FixCatalog::default()
+    };
+
+    let log_bytes = fs::read(&args.logfile)?;
+    let classifier = universalrun_diagnostics::LogClassifier::new(&catalog);
+    let report = classifier.classify(&log_bytes, args.exit_code)?;
+
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("============================================================");
+        println!(" UniversalRun Log Diagnostics & Failure Classification");
+        println!("============================================================");
+        println!("Log File:       {}", args.logfile.display());
+        println!("Exit Code:      {:?}", report.exit_code);
+        println!("Category:       {:?}", report.category);
+        println!("Confidence:     {:?}", report.confidence);
+        println!("Summary:        {}", report.summary);
+
+        println!("\nEvidence Lines ({}):", report.evidence_lines.len());
+        if report.evidence_lines.is_empty() {
+            println!("  (none)");
+        } else {
+            for line in &report.evidence_lines {
+                println!("  > {}", line);
+            }
+        }
+
+        println!("\nRecommended Declarative Fixes ({}):", report.recommended_fixes.len());
+        if report.recommended_fixes.is_empty() {
+            println!("  (none)");
+        } else {
+            for fix in &report.recommended_fixes {
+                println!("  - [{:?}] {}: {}", fix.risk_level, fix.title, fix.description);
+                println!("    Target Change: {}", fix.target_change);
+                if let Some(note) = &fix.status_note {
+                    println!("    Note:          {}", note);
+                }
+            }
+        }
+        println!("============================================================");
+    }
+
+    Ok(())
+}
+
+fn handle_bundle(args: BundleArgs) -> Result<(), Box<dyn std::error::Error>> {
+    if !args.logfile.exists() {
+        eprintln!("Error: log file '{}' does not exist", args.logfile.display());
+        std::process::exit(1);
+    }
+
+    let storage = ProfileStorage::new(None);
+    let manifest = storage.get_profile(&args.profile)?;
+
+    let catalog_path = PathBuf::from("diagnostics/catalog/fixes.toml");
+    let catalog = if catalog_path.exists() {
+        universalrun_diagnostics::FixCatalog::from_file(&catalog_path)?
+    } else {
+        universalrun_diagnostics::FixCatalog::default()
+    };
+
+    let log_bytes = fs::read(&args.logfile)?;
+    let classifier = universalrun_diagnostics::LogClassifier::new(&catalog);
+    let report = classifier.classify(&log_bytes, None)?;
+
+    let builder = universalrun_diagnostics::BundleBuilder::new();
+    let out = builder.build_bundle(&args.logfile, &manifest, &report, &args.out)?;
+
+    println!("Diagnostic bundle created at: {}", out.display());
     Ok(())
 }
 

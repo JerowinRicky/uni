@@ -22,11 +22,32 @@ pub fn generate_fallback_recipe(report: &AnalysisReport) -> Recipe {
     let mut dependencies = Vec::new();
     let mut dll_overrides = HashMap::new();
 
+    // Determine .NET strategy: default to wine-mono unless WPF/WinForms is detected
+    let dotnet_runtime = if let Some(dotnet) = &report.dotnet {
+        if dotnet.is_dotnet {
+            let needs_framework48 = report.imports.iter().any(|imp| {
+                imp.dll_name.eq_ignore_ascii_case("PresentationFramework.dll")
+                    || imp.dll_name.eq_ignore_ascii_case("System.Windows.Forms.dll")
+                    || imp.dll_name.eq_ignore_ascii_case("WindowsBase.dll")
+            }) || report.compatibility_rating.evidence.iter().any(|ev| {
+                ev.contains("WPF") || ev.contains("WinForms") || ev.contains("PresentationFramework")
+            });
+
+            if needs_framework48 {
+                dependencies.push("dotnet48".to_string());
+                crate::types::DotNetRuntimeStrategy::Framework48
+            } else {
+                crate::types::DotNetRuntimeStrategy::WineMono
+            }
+        } else {
+            crate::types::DotNetRuntimeStrategy::None
+        }
+    } else {
+        crate::types::DotNetRuntimeStrategy::None
+    };
+
     // Infer dependencies from static analysis
     for runtime in &report.required_runtimes {
-        if runtime.value.contains(".NET") {
-            dependencies.push("dotnet48".to_string());
-        }
         if runtime.value.contains("Visual C++") {
             dependencies.push("vcredist2022".to_string());
         }
@@ -61,6 +82,7 @@ pub fn generate_fallback_recipe(report: &AnalysisReport) -> Recipe {
             architecture: arch.to_string(),
             windows_version: "win10".to_string(),
         },
+        dotnet_runtime,
         dependencies,
         dll_overrides,
         registry_entries: Vec::new(),

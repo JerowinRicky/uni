@@ -30,8 +30,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Run Tests & Fuzz Smoke
+      - name: Run Tests & Fuzz Smoke (Debug)
         run: cargo test --workspace --verbose
+
+      - name: Run Tests (Release - verifies dev-key rejection in production profile)
+        run: cargo test --release --workspace --verbose
 
   security:
     name: Security & Audit

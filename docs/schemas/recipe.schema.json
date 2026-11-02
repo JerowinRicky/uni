@@ -54,6 +54,10 @@
         "windows_version": { "type": "string" }
       }
     },
+    "dotnet_runtime": {
+      "type": "string",
+      "enum": ["none", "wine-mono", "framework48"]
+    },
     "dependencies": {
       "type": "array",
       "items": { "type": "string" }

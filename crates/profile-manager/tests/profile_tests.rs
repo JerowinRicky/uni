@@ -112,6 +112,20 @@ fn test_case_collision_detection() {
 }
 
 #[test]
+#[cfg(unix)]
+fn test_security_rule_linux_symlink_rejection() {
+    let temp = tempdir().expect("tempdir");
+    let real_file = temp.path().join("real.txt");
+    std::fs::write(&real_file, b"content").expect("write real file");
+    let symlink_file = temp.path().join("symlink.txt");
+    std::os::unix::fs::symlink(&real_file, &symlink_file).expect("create symlink");
+
+    let res = validate_and_canonicalize_host_path(symlink_file.to_str().unwrap());
+    assert!(res.is_err(), "Symlinks must be rejected");
+    assert!(res.unwrap_err().to_string().contains("symlink"));
+}
+
+#[test]
 fn test_profile_lifecycle_and_rebuild_from_manifest() {
     let temp = tempdir().expect("tempdir");
     let storage = ProfileStorage::new(Some(temp.path().to_path_buf()));

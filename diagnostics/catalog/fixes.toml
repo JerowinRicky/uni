@@ -1,0 +1,54 @@
+[missing_vcredist]
+id = "missing_vcredist"
+title = "Install Microsoft Visual C++ 2015-2022 Runtime"
+description = "Install vcredist2022 into prefix to provide missing VC++ runtime libraries (msvcp140.dll, vcruntime140.dll)."
+target_change = "Add 'vcredist2022' to profile dependencies"
+reversible = true
+risk_level = "low"
+status_note = "Standard verified redistributable"
+
+[missing_dotnet]
+id = "missing_dotnet"
+title = "Provision Microsoft .NET Framework 4.8"
+description = "Install native .NET Framework 4.8 runtime (dotnet48) to resolve missing CLR assemblies."
+target_change = "Set dotnet_runtime = 'framework48' and add 'dotnet48' dependency"
+reversible = true
+risk_level = "medium"
+status_note = "Prefix rebuild recommended"
+
+[enable_dxvk]
+id = "enable_dxvk"
+title = "Enable DXVK Vulkan Direct3D Translation"
+description = "Override d3d11/dxgi to native to use Vulkan DXVK translation layer for Direct3D rendering."
+target_change = "Add native DLL overrides for d3d11 and dxgi; enable DRI hardware acceleration"
+reversible = true
+risk_level = "low"
+status_note = "[UNTESTED candidate on Linux]"
+
+[enable_virtual_desktop]
+id = "enable_virtual_desktop"
+title = "Enable Wine Virtual Desktop Mode"
+description = "Confine fullscreen application rendering inside an emulated virtual desktop window."
+target_change = "Add registry entry: HKCU\\Software\\Wine\\Explorer\\Desktops\\Default = '1920x1080'"
+reversible = true
+risk_level = "low"
+status_note = "[UNTESTED candidate on Linux]"
+
+[dll_native_override]
+id = "dll_native_override"
+title = "Configure Native DLL Override"
+description = "Override missing or crashing Wine builtin DLL to use native implementation."
+target_change = "Add DLL override mode 'native' in profile manifest"
+reversible = true
+risk_level = "medium"
+status_note = "Requires native Windows DLL file in prefix"
+
+[grant_network_permission]
+id = "grant_network_permission"
+title = "Grant Sandboxed Network Permission"
+description = "Allow outbound socket communication for application that was blocked by permission policy."
+target_change = "Set permissions.network = true in profile manifest"
+reversible = true
+risk_level = "medium"
+status_note = "Allows outbound network access from sandbox"
+

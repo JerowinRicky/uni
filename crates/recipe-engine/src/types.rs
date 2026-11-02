@@ -63,6 +63,16 @@ pub struct RecipeSignature {
     pub signature_hex: String,
 }
 
+/// .NET runtime provisioning strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum DotNetRuntimeStrategy {
+    #[default]
+    None,
+    WineMono,
+    Framework48,
+}
+
 /// Declarative Recipe (data only, zero shell scripts).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recipe {
@@ -73,6 +83,9 @@ pub struct Recipe {
     pub name: String,
     pub match_rules: MatchRules,
     pub runtime: RuntimeRecipeConfig,
+    /// Strategy for provisioning .NET runtime in prefix.
+    #[serde(default)]
+    pub dotnet_runtime: DotNetRuntimeStrategy,
     /// Catalog dependency IDs (e.g. "vcredist2022", "corefonts").
     #[serde(default)]
     pub dependencies: Vec<String>,
