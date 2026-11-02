@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "crates/common",
+    "crates/analyzer",
+    "crates/profile-manager",
+    "crates/recipe-engine",
+    "crates/runtime-wine",
+    "crates/sandbox",
+    "crates/supervisor",
+    "crates/diagnostics",
+]
+resolver = "2"

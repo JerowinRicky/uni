@@ -1,0 +1,10 @@
+[package]
+name = "universalrun-runtime-wine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+universalrun-common = { path = "../common" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tracing = "0.1"
