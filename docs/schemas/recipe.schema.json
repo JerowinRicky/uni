@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://universalrun.org/schemas/recipe.v1.json",
+  "title": "UniversalRun Recipe",
+  "description": "Declarative compatibility recipe for Windows applications under UniversalRun.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "revision",
+    "name",
+    "match_rules",
+    "runtime",
+    "dependencies",
+    "dll_overrides",
+    "registry_entries",
+    "permissions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "name": {
+      "type": "string"
+    },
+    "match_rules": {
+      "type": "object",
+      "properties": {
+        "sha256": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "product_name": { "type": ["string", "null"] },
+        "min_version": { "type": ["string", "null"] },
+        "max_version": { "type": ["string", "null"] }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["preferred", "min_version", "architecture", "windows_version"],
+      "properties": {
+        "preferred": { "type": "string" },
+        "min_version": { "type": "string" },
+        "architecture": { "type": "string", "enum": ["win32", "win64"] },
+        "windows_version": { "type": "string" }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dll_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["native", "builtin", "native_then_builtin", "builtin_then_native", "disabled"]
+      }
+    },
+    "registry_entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "value_name", "value_type", "value_data"],
+        "properties": {
+          "key": { "type": "string" },
+          "value_name": { "type": "string" },
+          "value_type": { "type": "string", "enum": ["string", "dword"] },
+          "value_data": { "type": "string" }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["network", "audio", "display", "dri"],
+      "properties": {
+        "network": { "type": "boolean" },
+        "audio": { "type": "boolean" },
+        "display": { "type": "boolean" },
+        "dri": { "type": "boolean" }
+      }
+    },
+    "known_issues": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tested_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "test_runner", "distro", "wine_version", "outcome"],
+        "properties": {
+          "date": { "type": "string" },
+          "test_runner": { "type": "string" },
+          "distro": { "type": "string" },
+          "wine_version": { "type": "string" },
+          "outcome": { "type": "string" },
+          "notes": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "signature": {
+      "type": ["object", "null"],
+      "required": ["key_id", "signature_hex"],
+      "properties": {
+        "key_id": { "type": "string" },
+        "signature_hex": { "type": "string", "pattern": "^[a-fA-F0-9]{128}$" }
+      }
+    }
+  }
+}
+

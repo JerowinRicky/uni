@@ -1,0 +1,40 @@
+[vcredist2022]
+id = "vcredist2022"
+name = "Microsoft Visual C++ 2015-2022 Redistributable (x64)"
+version = "14.40.33810.0"
+source_url = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+sha256 = "TODO"
+max_size_bytes = 52428800
+license = "Proprietary (Microsoft)"
+provenance = "Official Microsoft Download Center"
+
+[dotnet48]
+id = "dotnet48"
+name = "Microsoft .NET Framework 4.8 Runtime"
+version = "4.8.04115"
+source_url = "https://download.visualstudio.microsoft.com/download/pr/7f63e69d-2490-4e61-884c-352b2f56b627/545464177b901518f8e8162e84128dfd/ndp48-x86-x64-allos-enu.exe"
+sha256 = "TODO"
+max_size_bytes = 125829120
+license = "Proprietary (Microsoft)"
+provenance = "Official Microsoft Download Center"
+
+[corefonts]
+id = "corefonts"
+name = "Microsoft TrueType Core Fonts"
+version = "1.0"
+source_url = "https://downloads.sourceforge.net/project/corefonts/the%20fonts/final/arial32.exe"
+sha256 = "TODO"
+max_size_bytes = 10485760
+license = "Proprietary (Microsoft EULA)"
+provenance = "SourceForge CoreFonts Archive"
+
+[dxvk]
+id = "dxvk"
+name = "DXVK Vulkan-based D3D9/D3D10/D3D11 translation layer"
+version = "2.4"
+source_url = "https://github.com/doitsujin/dxvk/releases/download/v2.4/dxvk-2.4.tar.gz"
+sha256 = "TODO"
+max_size_bytes = 20971520
+license = "zlib/libpng"
+provenance = "Official GitHub Release (doitsujin/dxvk)"
+

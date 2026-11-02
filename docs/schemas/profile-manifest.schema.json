@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://universalrun.org/schemas/profile-manifest.v1.json",
+  "title": "UniversalRun Profile Manifest",
+  "description": "Declarative, reproducible configuration manifest for an isolated per-application environment.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profile_id",
+    "display_name",
+    "target_app",
+    "runtime",
+    "dependencies",
+    "env_vars",
+    "dll_overrides",
+    "filesystem_mappings",
+    "permissions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "profile_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "target_app": {
+      "type": "string"
+    },
+    "target_app_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "recipe_id": {
+      "type": ["string", "null"]
+    },
+    "recipe_revision": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["name", "version", "architecture", "windows_version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "architecture": { "type": "string", "enum": ["win32", "win64"] },
+        "windows_version": { "type": "string" }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "version", "sha256"],
+        "properties": {
+          "id": { "type": "string" },
+          "version": { "type": "string" },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "env_vars": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "dll_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["native", "builtin", "native_then_builtin", "builtin_then_native", "disabled"]
+      }
+    },
+    "filesystem_mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["host_path", "guest_path", "read_only"],
+        "properties": {
+          "host_path": { "type": "string" },
+          "guest_path": { "type": "string" },
+          "read_only": { "type": "boolean" }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["network", "audio", "display", "dri"],
+      "properties": {
+        "network": { "type": "boolean" },
+        "audio": { "type": "boolean" },
+        "display": { "type": "boolean" },
+        "dri": { "type": "boolean" }
+      }
+    },
+    "rebuild_hash": {
+      "type": ["string", "null"],
+      "pattern": "^[a-fA-F0-9]{64}$"
+    }
+  }
+}
+

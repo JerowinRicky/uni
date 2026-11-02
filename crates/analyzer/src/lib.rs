@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use types::*;
+pub use types::*;
 use universalrun_common::error::{Result, UniversalRunError};
 
 pub fn version() -> &'static str {
