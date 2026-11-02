@@ -33,3 +33,4 @@ echo "[record_syscalls] Summary saved to: ${OUTPUT_DIR}/syscall_summary.txt"
 if [ -f "${OUTPUT_DIR}/syscall_summary.txt" ]; then
     head -n 25 "${OUTPUT_DIR}/syscall_summary.txt"
 fi
+

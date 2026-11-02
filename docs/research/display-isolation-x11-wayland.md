@@ -68,3 +68,4 @@ Xwayland :100 -rootless -displayfd 3
    - Launch a dedicated nested `Xwayland` server per app sandbox. This isolates X11 traffic completely from other applications.
 3. **Host on pure Xorg (legacy)**:
    - Provide clear security disclaimer: "Running on native X11 cannot prevent window surveillance. Wayland host recommended for full sandbox guarantees."
+

@@ -55,3 +55,4 @@ chmod +x tests/fixtures/*.sh
 - [ADR 0001: Wine in Bubblewrap Feasibility (Go/No-Go)](docs/adr/0001-wine-in-bubblewrap-feasibility.md)
 - [Research: Ubuntu 24.04 AppArmor & Unprivileged User Namespaces](docs/research/ubuntu-24-04-userns-apparmor.md)
 - [Research: Display Isolation (X11 vs Wayland vs Nested Servers)](docs/research/display-isolation-x11-wayland.md)
+

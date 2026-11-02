@@ -59,3 +59,4 @@ fi
 rm -f "${REG_FILE}"
 
 echo "[sanitize_prefix] Prefix sanitization complete."
+

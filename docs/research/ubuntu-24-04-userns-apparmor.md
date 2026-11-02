@@ -75,3 +75,4 @@ bwrap --unshare-user --true
 If this exits with non-zero exit status, UniversalRun presents a clear diagnostic prompt:
 - Explains that Ubuntu 24.04 restricts user namespaces.
 - Provides the one-click copyable `sysctl` command or instructs the user to install the verified `.deb` package with the bundled AppArmor profile.
+

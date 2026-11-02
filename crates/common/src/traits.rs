@@ -39,3 +39,4 @@ pub trait AudioAdapter: Send + Sync {
 pub trait InstallerAdapter: Send + Sync {
     fn can_handle(&self, target_path: &Path) -> bool;
 }
+
