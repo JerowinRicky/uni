@@ -543,22 +543,21 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
         manifest.runtime.name, manifest.runtime.version
     ));
 
-    // Derive display from host environment or default to :0
-    let host_display = std::env::var("DISPLAY").ok().or_else(|| Some(":0".to_string()));
+    // Derive display from host environment or fallback to :0
+    let (host_display, display_source) = match std::env::var("DISPLAY") {
+        Ok(val) if !val.trim().is_empty() => (
+            Some(val.clone()),
+            format!("host environment variable $DISPLAY ({})", val),
+        ),
+        _ => (
+            Some(":0".to_string()),
+            "fallback default (:0, $DISPLAY not set)".to_string(),
+        ),
+    };
 
-    // Create scoped Xauthority directory with private permissions (0700 on Unix)
-    let xauth_dir = tempfile::Builder::new()
-        .prefix("universalrun-xauth-")
-        .tempdir()?;
-    let xauth_cookie_path = xauth_dir.path().join("xauth_cookie");
-    fs::write(&xauth_cookie_path, b"UNIVERSALRUN_SCOPED_XAUTH_COOKIE_BYTES")?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(xauth_dir.path(), fs::Permissions::from_mode(0o700));
-        let _ = fs::set_permissions(&xauth_cookie_path, fs::Permissions::from_mode(0o600));
-    }
+    // PLAN MODE MUST NOT CREATE ANYTHING ON DISK.
+    // Use an illustrative placeholder path for arguments display; real cookie is generated only at spawn time.
+    let placeholder_xauth = PathBuf::from("/tmp/universalrun-xauth-placeholder/xauth_cookie");
 
     let ctx = universalrun_sandbox::SandboxContext {
         policy: policy.clone(),
@@ -567,7 +566,7 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
         host_prefix_dir: prefix_dir.clone(),
         host_x11_display: host_display.clone(),
         host_scoped_xauth: if manifest.permissions.display {
-            Some(xauth_cookie_path)
+            Some(placeholder_xauth)
         } else {
             None
         },
@@ -595,7 +594,6 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
 
     let enforcement = policy.enforcement_status();
 
-    // Derive top summary lines directly from enforcement_status to guarantee zero contradiction
     let (net_lvl, net_desc) = &enforcement["network"];
     let (audio_lvl, audio_desc) = &enforcement["audio"];
     let (mic_lvl, mic_desc) = &enforcement["microphone"];
@@ -607,8 +605,10 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
             "schema_version": "1.0.0",
             "profile_id": args.profile,
             "plan_only": true,
-            "notice": "PLAN ONLY: Bubblewrap arguments generated as data, nothing executed. Note: paths are illustrative until resolved on the target host.",
+            "notice": "PLAN ONLY: Bubblewrap arguments generated as data, nothing executed or written to disk. Paths are illustrative until resolved on the target host.",
             "target_app": manifest.target_app,
+            "display_source": display_source,
+            "x11_cookie_policy": "Spawn-time generation via 'xauth generate <display> . untrusted timeout 0' in private 0700 dir (UNTESTED ON LINUX)",
             "prefix_layout": {
                 "prefix_root": prefix_dir.to_string_lossy(),
                 "wine_c_drive": format!("{}/drive_c", prefix_dir.to_string_lossy()),
@@ -623,15 +623,31 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
         println!("================================================================================");
         println!(" UniversalRun Sandbox Plan: {}", args.profile);
         println!("================================================================================");
-        println!("PLAN ONLY: Bubblewrap arguments generated as data, nothing executed.");
+        println!("PLAN ONLY: Bubblewrap arguments generated as data, nothing executed or written to disk.");
         println!("Note: paths are illustrative until resolved on the target host.\n");
 
-        println!("Target App:        {}", manifest.target_app);
-        println!("Network:           {:?} ({})", net_lvl, net_desc);
-        println!("Audio:             {:?} ({})", audio_lvl, audio_desc);
-        println!("Microphone:        {:?} ({})", mic_lvl, mic_desc);
-        println!("Display:           {:?} ({})", disp_lvl, disp_desc);
-        println!("GPU / DRI:         {:?} ({})", gpu_lvl, gpu_desc);
+        println!("Target Application: {}", manifest.target_app);
+        println!("Display Source:     {}", display_source);
+        println!("X11 Cookie Policy:  Spawn-time generation via 'xauth generate <display> . untrusted' in private 0700 dir [UNTESTED ON LINUX]\n");
+
+        println!("Permission & Enforcement Policy Matrix:");
+        println!("  {:<14} {:<12} {:<12} Mechanism & Details", "Resource", "Permission", "Enforced?");
+        println!("  {}", "-".repeat(84));
+
+        let (files_lvl, files_desc) = &enforcement["files"];
+
+        let rows = [
+            ("Network", if manifest.permissions.network { "Allowed" } else { "Denied" }, format!("{:?}", net_lvl), *net_desc),
+            ("Audio", if manifest.permissions.audio { "Allowed" } else { "Denied" }, format!("{:?}", audio_lvl), *audio_desc),
+            ("Microphone", "Denied", format!("{:?}", mic_lvl), *mic_desc),
+            ("Display", if manifest.permissions.display { "Allowed" } else { "Denied" }, format!("{:?}", disp_lvl), *disp_desc),
+            ("GPU / DRI", if manifest.permissions.dri { "Allowed" } else { "Denied" }, format!("{:?}", gpu_lvl), *gpu_desc),
+            ("Files", if policy.granted_folders.is_empty() { "Denied" } else { "Allowed" }, format!("{:?}", files_lvl), *files_desc),
+        ];
+
+        for (resource, perm, enf, details) in rows {
+            println!("  {:<14} {:<12} {:<12} {}", resource, perm, enf, details);
+        }
 
         println!("\nApplication Files & Prefix Layout:");
         println!("  - Wine Prefix Root:    {}", prefix_dir.display());
@@ -649,14 +665,6 @@ fn handle_sandbox_plan(args: SandboxPlanArgs) -> Result<(), Box<dyn std::error::
                     if mapping.read_only { "Read-Only" } else { "Read-Write" }
                 );
             }
-        }
-
-        println!("\nEnforcement Matrix:");
-        let mut sorted_keys: Vec<_> = enforcement.keys().collect();
-        sorted_keys.sort();
-        for key in sorted_keys {
-            let (level, desc) = &enforcement[key];
-            println!("  - {:<12}: {:?} ({})", key, level, desc);
         }
 
         println!("\nGenerated Bubblewrap Argument Vector ({} arguments):", bwrap_args_str.len());
