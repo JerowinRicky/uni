@@ -3,6 +3,10 @@ name = "universalrun-analyzer"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "universalrun"
+path = "src/bin/universalrun.rs"
+
 [dependencies]
 universalrun-common = { path = "../common" }
 serde = { version = "1.0", features = ["derive"] }
@@ -10,4 +14,7 @@ serde_json = "1.0"
 thiserror = "1.0"
 goblin = "0.8"
 tracing = "0.1"
-
+sha2 = "0.10"
+hex = "0.4"
+cfb = "0.7"
+clap = { version = "4.5", features = ["derive"] }

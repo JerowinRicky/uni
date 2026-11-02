@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://universalrun.org/schemas/analysis-report.v1.json",
+  "title": "UniversalRun Analysis Report",
+  "description": "Schema for static analysis findings and compatibility rating of Windows binaries and installers",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "file_name",
+    "file_size_bytes",
+    "sha256",
+    "architecture",
+    "subsystem",
+    "num_sections",
+    "imports",
+    "delay_load_imports",
+    "execution_level",
+    "authenticode",
+    "installer_type",
+    "graphics_apis",
+    "required_runtimes",
+    "security_flags",
+    "compatibility_rating",
+    "unverifiable_aspects"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "file_name": {
+      "type": "string"
+    },
+    "file_size_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "architecture": {
+      "type": "string",
+      "enum": ["x86", "x64", "arm64", "unknown"]
+    },
+    "subsystem": {
+      "type": "string",
+      "enum": ["windows_gui", "windows_cui", "native", "posix_cui", "windows_ce_gui", "efi_application", "unknown"]
+    },
+    "entry_point": {
+      "type": ["integer", "null"]
+    },
+    "num_sections": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "imports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dll_name", "function_count"],
+        "properties": {
+          "dll_name": { "type": "string" },
+          "function_count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "delay_load_imports": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "execution_level": {
+      "type": "object",
+      "required": ["value", "confidence"],
+      "properties": {
+        "value": { "type": "string", "enum": ["asInvoker", "highestAvailable", "requireAdministrator", "unknown"] },
+        "confidence": { "type": "string", "enum": ["certain", "likely", "unknown"] },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "authenticode": {
+      "type": "object",
+      "required": ["signature_present", "file_hash_verified", "chain_trust"],
+      "properties": {
+        "signature_present": { "type": "boolean" },
+        "file_hash_verified": { "type": ["boolean", "null"] },
+        "chain_trust": { "type": "string", "enum": ["trusted", "untrusted", "unknown"] },
+        "publisher": { "type": ["string", "null"] }
+      }
+    },
+    "installer_type": {
+      "type": "object",
+      "required": ["value", "confidence"],
+      "properties": {
+        "value": { "type": "string", "enum": ["portable", "msi", "nsis", "inno_setup", "install_shield", "unknown"] },
+        "confidence": { "type": "string", "enum": ["certain", "likely", "unknown"] },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "installer_version": {
+      "type": ["string", "null"]
+    },
+    "dotnet": {
+      "type": ["object", "null"],
+      "properties": {
+        "is_dotnet": { "type": "boolean" },
+        "flavor": { "type": "string", "enum": ["framework", "modern_dot_net", "unknown"] },
+        "target_framework": { "type": ["string", "null"] },
+        "confidence": { "type": "string", "enum": ["certain", "likely", "unknown"] }
+      }
+    },
+    "graphics_apis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["value", "confidence"],
+        "properties": {
+          "value": { "type": "string", "enum": ["direct3d9", "direct3d10", "direct3d11", "direct3d12", "opengl", "vulkan"] },
+          "confidence": { "type": "string", "enum": ["certain", "likely", "unknown"] },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "required_runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["value", "confidence"],
+        "properties": {
+          "value": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["certain", "likely", "unknown"] },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "security_flags": {
+      "type": "object",
+      "required": ["requests_admin", "has_drivers_or_services"],
+      "properties": {
+        "requests_admin": { "type": "boolean" },
+        "has_drivers_or_services": { "type": "boolean" },
+        "known_anticheat_or_drm": { "type": ["string", "null"] }
+      }
+    },
+    "compatibility_rating": {
+      "type": "object",
+      "required": ["category", "summary", "evidence"],
+      "properties": {
+        "category": { "type": "string", "enum": ["Excellent", "Good", "Partial", "Experimental", "Unsupported", "Unknown"] },
+        "summary": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "unverifiable_aspects": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
